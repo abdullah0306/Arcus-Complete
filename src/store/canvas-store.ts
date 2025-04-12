@@ -27,7 +27,9 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     single_doors_and_double_doors: false,
     double_doors_and_windows: false,
     wall_color_processing: false,
-    room_area_processing: false
+    room_area_processing: false,
+    room_n_processing: false,
+    exclusion_Zones_processing: false
   },
   setCanvas: (canvas) => set({ canvas }),
   setCurrentLayer: (layer) => set({ currentLayer: layer }),
@@ -42,6 +44,16 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     const state = useCanvasStore.getState();
     const layers = state.layers;
 
+    // Check if exclusion_Zones_processing is visible and has data for this page
+    if (layers.exclusion_Zones_processing && canvasData.exclusion_Zones_processing?.[currentPage]) {
+      return 'exclusion_Zones_processing';
+    }
+    
+    // Check if room_n_processing is visible and has data for this page
+    if (layers.room_n_processing && canvasData.room_n_processing?.[currentPage]) {
+      return 'room_n_processing';
+    }
+    
     // Check if room_area_processing is visible and has data for this page
     if (layers.room_area_processing && canvasData.room_area_processing?.[currentPage]) {
       return 'room_area_processing';

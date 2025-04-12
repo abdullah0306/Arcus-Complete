@@ -60,6 +60,32 @@ const apiOptions: APIOption[] = [
     ]
   },
   {
+    id: "room-number-detection",
+    title: "Room Number Detection",
+    description: "Automatically identifies and labels room numbers from floor plans.",
+    enabled: false,
+    icon: "🔢",
+    progress: 0,
+    details: [
+      "Room number identification",
+      "Sequential numbering",
+      "Custom numbering schemes"
+    ]
+  },
+  {
+    id: "inclusive-exclusive-zones",
+    title: "Inclusive/Exclusive Zones",
+    description: "Detects and highlights inclusive and exclusive zones within floor plans.",
+    enabled: false,
+    icon: "🔍",
+    progress: 0,
+    details: [
+      "Zone boundary detection",
+      "Inclusive area highlighting",
+      "Exclusive area marking"
+    ]
+  },
+  {
     id: "walls-detection",
     title: "Walls Detection",
     description: "Precise wall detection with thickness measurement and material analysis.",
@@ -185,6 +211,12 @@ export default function RightPanel() {
       } else if (featureId === "room-detection") {
         // Dispatch event for room area detection completion
         window.dispatchEvent(new CustomEvent('roomAreaDetectionComplete'));
+      } else if (featureId === "room-number-detection") {
+        // Dispatch event for room number detection completion
+        window.dispatchEvent(new CustomEvent('roomNumberDetectionComplete'));
+      } else if (featureId === "inclusive-exclusive-zones") {
+        // Dispatch event for exclusion zones detection completion
+        window.dispatchEvent(new CustomEvent('exclusionZonesDetectionComplete'));
       }
       
     } catch (error) {
@@ -209,6 +241,16 @@ export default function RightPanel() {
     if (!enabled) return;
     await simulateProcessing("room-detection");
   };
+  
+  const handleRoomNumberDetection = async (enabled: boolean) => {
+    if (!enabled) return;
+    await simulateProcessing("room-number-detection");
+  };
+  
+  const handleExclusionZonesDetection = async (enabled: boolean) => {
+    if (!enabled) return;
+    await simulateProcessing("inclusive-exclusive-zones");
+  };
 
   const handleOptionToggle = async (optionId: string) => {
     try {
@@ -217,7 +259,7 @@ export default function RightPanel() {
       
       // For detection features, we want to ensure they always run the 1-minute process
       // when toggled on, regardless of previous state
-      if (optionId === "doors-windows" || optionId === "walls-detection" || optionId === "room-detection") {
+      if (optionId === "doors-windows" || optionId === "walls-detection" || optionId === "room-detection" || optionId === "room-number-detection" || optionId === "inclusive-exclusive-zones") {
         // First set the option to enabled in the UI
         const updatedOptions = apiOptions.map(opt => 
           opt.id === optionId 
@@ -242,6 +284,10 @@ export default function RightPanel() {
           handleWallsDetection(true);
         } else if (optionId === "room-detection") {
           handleRoomAreaDetection(true);
+        } else if (optionId === "room-number-detection") {
+          handleRoomNumberDetection(true);
+        } else if (optionId === "inclusive-exclusive-zones") {
+          handleExclusionZonesDetection(true);
         }
       } else {
         // For other options, toggle as normal
