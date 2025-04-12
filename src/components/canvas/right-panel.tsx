@@ -120,20 +120,22 @@ export default function RightPanel() {
   const { currentPage } = usePDFPageStore(); // Use currentPage from the store
   const [expandedOption, setExpandedOption] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingFeature, setProcessingFeature] = useState<string | null>(null);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [options, setOptions] = useState<APIOption[]>(apiOptions);
 
-  const handleDoorsWindowsDetection = async (enabled: boolean) => {
-    if (!enabled || !projectId) {
+  const simulateProcessing = async (featureId: string) => {
+    if (!projectId) {
       return;
     }
 
     try {
       // Start processing - show loading indicator
       setIsProcessing(true);
+      setProcessingFeature(featureId);
       setProcessingProgress(0);
       
-      console.log('Starting simulated doors-windows detection process');
+      console.log(`Starting simulated ${featureId} detection process`);
       
       // Get the current project data - we still need this to verify the project exists
       const response = await fetch(`/api/canvas-projects/${projectId}`);
@@ -168,23 +170,36 @@ export default function RightPanel() {
       clearInterval(progressInterval);
       
       // Set final progress to 100%
+      // Complete the processing
+      setIsProcessing(false);
+      setProcessingFeature(null);
       setProcessingProgress(100);
-      console.log('Simulated processing complete');
       
-      // Dispatch an event to show the doors and windows layers
-      window.dispatchEvent(new CustomEvent('doorsWindowsDetectionComplete', {
-        detail: {
-          projectId,
-          currentPage
-        }
-      }));
+      // Dispatch the appropriate event based on the feature
+      if (featureId === "doors-windows") {
+        // Dispatch event for doors and windows detection completion
+        window.dispatchEvent(new CustomEvent('doorsWindowsDetectionComplete'));
+      } else if (featureId === "walls-detection") {
+        // Dispatch event for walls detection completion
+        window.dispatchEvent(new CustomEvent('wallsDetectionComplete'));
+      }
       
     } catch (error) {
-      console.error("Error during doors/windows detection:", error);
+      console.error(`Error during ${featureId} detection:`, error);
       alert(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsProcessing(false);
     }
+  };
+  
+  const handleDoorsWindowsDetection = async (enabled: boolean) => {
+    if (!enabled) return;
+    await simulateProcessing("doors-windows");
+  };
+  
+  const handleWallsDetection = async (enabled: boolean) => {
+    if (!enabled) return;
+    await simulateProcessing("walls-detection");
   };
 
   const handleOptionToggle = async (optionId: string) => {
@@ -192,9 +207,9 @@ export default function RightPanel() {
       const option = apiOptions.find(opt => opt.id === optionId);
       if (!option) return;
       
-      // For doors-windows detection, we want to ensure it always runs the 1-minute process
+      // For detection features, we want to ensure they always run the 1-minute process
       // when toggled on, regardless of previous state
-      if (optionId === "doors-windows") {
+      if (optionId === "doors-windows" || optionId === "walls-detection") {
         // First set the option to enabled in the UI
         const updatedOptions = apiOptions.map(opt => 
           opt.id === optionId 
@@ -212,8 +227,12 @@ export default function RightPanel() {
         });
         window.dispatchEvent(event);
         
-        // Start the doors-windows detection process
-        handleDoorsWindowsDetection(true);
+        // Start the appropriate detection process
+        if (optionId === "doors-windows") {
+          handleDoorsWindowsDetection(true);
+        } else if (optionId === "walls-detection") {
+          handleWallsDetection(true);
+        }
       } else {
         // For other options, toggle as normal
         const updatedOptions = apiOptions.map(opt => 
@@ -297,7 +316,7 @@ export default function RightPanel() {
                       {option.title}
                     </span>
                   </div>
-                  {option.id === "doors-windows" && isProcessing ? (
+                  {isProcessing && processingFeature === option.id ? (
                     <div className="flex items-center space-x-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span className="text-sm text-gray-500">Processing...</span>
