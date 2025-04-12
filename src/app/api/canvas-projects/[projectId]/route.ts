@@ -22,10 +22,8 @@ export async function GET(
       .select()
       .from(canvasProjects)
       .where(
-        and(
-          eq(canvasProjects.id, params.projectId),
-          eq(canvasProjects.userId, session.user.id)
-        )
+        eq(canvasProjects.id, params.projectId)
+        // Removed the user ID filter to allow any user to access any project
       )
       .limit(1);
 
