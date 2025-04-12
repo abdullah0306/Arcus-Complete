@@ -66,6 +66,7 @@ export async function PATCH(
       single_doors_and_double_doors: [],
       double_doors_and_windows: [],
       wall_color_processing: [], // Added for Walls Detection feature
+      room_area_processing: [], // Added for Room Area Detection feature
     };
 
     // Merge with provided data if it exists
@@ -104,7 +105,8 @@ export async function PATCH(
           single_doors_and_windows: finalCanvasData.single_doors_and_windows,
           single_doors_and_double_doors: finalCanvasData.single_doors_and_double_doors,
           double_doors_and_windows: finalCanvasData.double_doors_and_windows,
-          wall_color_processing: finalCanvasData.wall_color_processing
+          wall_color_processing: finalCanvasData.wall_color_processing,
+          room_area_processing: finalCanvasData.room_area_processing
         }
       })
       .where(
