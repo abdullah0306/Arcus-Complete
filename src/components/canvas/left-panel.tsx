@@ -96,6 +96,12 @@ export default function LeftPanel() {
   const [roomNLayerProcessing, setRoomNLayerProcessing] = useState(false);
   const [roomNEyeProcessing, setRoomNEyeProcessing] = useState(false);
   const [roomNDetectionActivated, setRoomNDetectionActivated] = useState(false);
+  
+  // Inclusive/Exclusive Zones Detection states
+  const [exclusionZonesLayerVisible, setExclusionZonesLayerVisible] = useState(false);
+  const [exclusionZonesLayerProcessing, setExclusionZonesLayerProcessing] = useState(false);
+  const [exclusionZonesEyeProcessing, setExclusionZonesEyeProcessing] = useState(false);
+  const [exclusionZonesDetectionActivated, setExclusionZonesDetectionActivated] = useState(false);
   const { projectId } = useParams();
   const { data: project } = useGetCanvasProject(projectId as string);
   const { currentPage } = usePDFPageStore();
@@ -128,6 +134,12 @@ export default function LeftPanel() {
     setRoomNLayerProcessing(false);
     setRoomNEyeProcessing(false);
     setLayerVisibility("room_n_processing", false);
+    
+    // Reset the exclusion zones layer visibility state on page refresh
+    setExclusionZonesLayerVisible(false);
+    setExclusionZonesLayerProcessing(false);
+    setExclusionZonesEyeProcessing(false);
+    setLayerVisibility("exclusion_Zones_processing", false);
   }, [project]);
 
   const getLayerArrayKey = (states: typeof layerStates) => {
@@ -395,6 +407,34 @@ export default function LeftPanel() {
           }));
         }
       }
+    } else if (apiId === "inclusive-exclusive-zones") {
+      if (enabled) {
+        // For exclusion zones detection, we'll set the processing state
+        // The actual visibility will be set when the detection completes
+        setExclusionZonesLayerProcessing(true);
+        // Initially set to not visible
+        setExclusionZonesLayerVisible(false);
+        // Mark that exclusion zones detection has been activated in this session
+        setExclusionZonesDetectionActivated(true);
+      } else {
+        // When disabling, hide the layer
+        setExclusionZonesLayerProcessing(false);
+        setExclusionZonesLayerVisible(false);
+        // Reset the activation state
+        setExclusionZonesDetectionActivated(false);
+        
+        // Hide the layer on the canvas
+        const exclusionZonesUrl = project?.canvasData?.exclusion_Zones_processing?.[currentPage];
+        if (exclusionZonesUrl) {
+          window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+            detail: {
+              imageUrl: exclusionZonesUrl,
+              layerId: "exclusion_Zones_processing",
+              visible: false
+            }
+          }));
+        }
+      }
     }
   };
 
@@ -538,12 +578,42 @@ export default function LeftPanel() {
         console.error('No room number processing image found for the current page');
       }
     };
+    
+    const handleExclusionZonesDetectionComplete = (event: Event) => {
+      // Processing is complete - show the layer automatically
+      console.log('Inclusive/Exclusive Zones detection complete event received');
+      
+      // Set processing to false and make the layer visible
+      setExclusionZonesLayerProcessing(false);
+      setExclusionZonesLayerVisible(true); // Make it visible by default
+      
+      // Update the canvas store to make the layer visible
+      setLayerVisibility("exclusion_Zones_processing", true);
+      
+      // Get the exclusion zones processing image URL for the current page
+      const exclusionZonesUrl = project?.canvasData?.exclusion_Zones_processing?.[currentPage];
+      console.log('Exclusion Zones URL:', exclusionZonesUrl);
+      
+      if (exclusionZonesUrl) {
+        // Make the layer visible immediately after processing completes
+        window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            imageUrl: exclusionZonesUrl,
+            layerId: "exclusion_Zones_processing",
+            visible: true // Make it visible by default
+          }
+        }));
+      } else {
+        console.error('No exclusion zones processing image found for the current page');
+      }
+    };
 
     window.addEventListener("apiToggle", handleAPIToggle as EventListener);
     window.addEventListener("doorsWindowsDetectionComplete", handleDoorsWindowsDetectionComplete as EventListener);
     window.addEventListener("wallsDetectionComplete", handleWallsDetectionComplete as EventListener);
     window.addEventListener("roomAreaDetectionComplete", handleRoomAreaDetectionComplete as EventListener);
     window.addEventListener("roomNumberDetectionComplete", handleRoomNumberDetectionComplete as EventListener);
+    window.addEventListener("exclusionZonesDetectionComplete", handleExclusionZonesDetectionComplete as EventListener);
     
     return () => {
       window.removeEventListener("apiToggle", handleAPIToggle as EventListener);
@@ -551,8 +621,9 @@ export default function LeftPanel() {
       window.removeEventListener("wallsDetectionComplete", handleWallsDetectionComplete as EventListener);
       window.removeEventListener("roomAreaDetectionComplete", handleRoomAreaDetectionComplete as EventListener);
       window.removeEventListener("roomNumberDetectionComplete", handleRoomNumberDetectionComplete as EventListener);
+      window.removeEventListener("exclusionZonesDetectionComplete", handleExclusionZonesDetectionComplete as EventListener);
     };
-  }, [project, currentPage, wallsLayerVisible, roomAreaLayerVisible, roomNLayerVisible]);
+  }, [project, currentPage, wallsLayerVisible, roomAreaLayerVisible, roomNLayerVisible, exclusionZonesLayerVisible]);
 
   const renderLayer = (layer: Layer, isDarkMode: boolean) => (
     <div 
@@ -935,6 +1006,107 @@ export default function LeftPanel() {
                   "text-sm font-medium",
                   isDarkMode ? "text-zinc-300" : "text-zinc-700"
                 )}>Room Numbers</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Exclusion Zones Layer - Only show when exclusion zones detection has been explicitly activated by the user */}
+        {!exclusionZonesLayerProcessing && exclusionZonesDetectionActivated && project?.canvasData?.exclusion_Zones_processing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                {exclusionZonesEyeProcessing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye 
+                    className={cn(
+                      "h-4 w-4 transition-all",
+                      exclusionZonesLayerVisible ? (isDarkMode ? "text-orange-400" : "text-orange-500") : "text-zinc-400",
+                      "group-hover:text-orange-500 dark:group-hover:text-orange-400",
+                      "cursor-pointer"
+                    )}
+                    onClick={async () => {
+                      try {
+                        // Show processing indicator
+                        setExclusionZonesEyeProcessing(true);
+                        
+                        const newVisibility = !exclusionZonesLayerVisible;
+                        setExclusionZonesLayerVisible(newVisibility);
+                        
+                        // Update the canvas store to reflect the layer visibility
+                        setLayerVisibility("exclusion_Zones_processing", newVisibility);
+                        
+                        // Get the appropriate image URL based on visibility
+                        let imageUrl;
+                        if (newVisibility) {
+                          // When showing the layer, use exclusion_Zones_processing array
+                          imageUrl = project?.canvasData?.exclusion_Zones_processing?.[currentPage];
+                        } else {
+                          // When hiding the layer, use pages array (original image)
+                          imageUrl = project?.canvasData?.pages?.[currentPage];
+                        }
+                        
+                        if (imageUrl) {
+                          // Call the layer-visibility API
+                          const response = await fetch(`/api/canvas/layer-visibility`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              projectId,
+                              layerId: newVisibility ? "exclusion_Zones_processing" : "pages",
+                              visible: true,
+                              currentPage
+                            })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (data.success) {
+                            // Dispatch event to update canvas with the appropriate layer
+                            window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+                              detail: {
+                                imageUrl: imageUrl,
+                                layerId: newVisibility ? "exclusion_Zones_processing" : "pages",
+                                visible: true
+                              }
+                            }));
+                            
+                            console.log(`Toggled to ${newVisibility ? 'exclusion_Zones_processing' : 'pages'} layer`);
+                          }
+                        } else {
+                          console.error('No image found for the current page');
+                        }
+                      } catch (error) {
+                        console.error('Error toggling exclusion zones layer:', error);
+                      } finally {
+                        // Hide processing indicator
+                        setExclusionZonesEyeProcessing(false);
+                      }
+                    }}
+                  />
+                )}
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Inclusive/Exclusive Zones</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Exclusion Zones Processing Indicator */}
+        {exclusionZonesLayerProcessing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Inclusive/Exclusive Zones</span>
               </div>
             </div>
           </div>
