@@ -84,6 +84,12 @@ export default function LeftPanel() {
   const [wallsLayerProcessing, setWallsLayerProcessing] = useState(false);
   const [wallsEyeProcessing, setWallsEyeProcessing] = useState(false);
   const [wallsDetectionActivated, setWallsDetectionActivated] = useState(false);
+  
+  // Room Area Detection states
+  const [roomAreaLayerVisible, setRoomAreaLayerVisible] = useState(false);
+  const [roomAreaLayerProcessing, setRoomAreaLayerProcessing] = useState(false);
+  const [roomAreaEyeProcessing, setRoomAreaEyeProcessing] = useState(false);
+  const [roomAreaDetectionActivated, setRoomAreaDetectionActivated] = useState(false);
   const { projectId } = useParams();
   const { data: project } = useGetCanvasProject(projectId as string);
   const { currentPage } = usePDFPageStore();
@@ -104,6 +110,12 @@ export default function LeftPanel() {
     setWallsLayerProcessing(false);
     setWallsEyeProcessing(false);
     setLayerVisibility("wall_color_processing", false);
+    
+    // Reset the room area layer visibility state on page refresh
+    setRoomAreaLayerVisible(false);
+    setRoomAreaLayerProcessing(false);
+    setRoomAreaEyeProcessing(false);
+    setLayerVisibility("room_area_processing", false);
   }, [project]);
 
   const getLayerArrayKey = (states: typeof layerStates) => {
@@ -315,6 +327,34 @@ export default function LeftPanel() {
           }));
         }
       }
+    } else if (apiId === "room-detection") {
+      if (enabled) {
+        // For room area detection, we'll set the processing state
+        // The actual visibility will be set when the detection completes
+        setRoomAreaLayerProcessing(true);
+        // Initially set to not visible
+        setRoomAreaLayerVisible(false);
+        // Mark that room area detection has been activated in this session
+        setRoomAreaDetectionActivated(true);
+      } else {
+        // When disabling, hide the layer
+        setRoomAreaLayerProcessing(false);
+        setRoomAreaLayerVisible(false);
+        // Reset the activation state
+        setRoomAreaDetectionActivated(false);
+        
+        // Hide the layer on the canvas
+        const roomAreaUrl = project?.canvasData?.room_area_processing?.[currentPage];
+        if (roomAreaUrl) {
+          window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+            detail: {
+              imageUrl: roomAreaUrl,
+              layerId: "room_area_processing",
+              visible: false
+            }
+          }));
+        }
+      }
     }
   };
 
@@ -400,17 +440,48 @@ export default function LeftPanel() {
         console.error('No wall color processing image found for the current page');
       }
     };
+    
+    const handleRoomAreaDetectionComplete = (event: Event) => {
+      // Processing is complete - show the layer automatically
+      console.log('Room Area detection complete event received');
+      
+      // Set processing to false and make the layer visible
+      setRoomAreaLayerProcessing(false);
+      setRoomAreaLayerVisible(true); // Make it visible by default
+      
+      // Update the canvas store to make the layer visible
+      setLayerVisibility("room_area_processing", true);
+      
+      // Get the room area processing image URL for the current page
+      const roomAreaUrl = project?.canvasData?.room_area_processing?.[currentPage];
+      console.log('Room Area URL:', roomAreaUrl);
+      
+      if (roomAreaUrl) {
+        // Make the layer visible immediately after processing completes
+        window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            imageUrl: roomAreaUrl,
+            layerId: "room_area_processing",
+            visible: true // Make it visible by default
+          }
+        }));
+      } else {
+        console.error('No room area processing image found for the current page');
+      }
+    };
 
     window.addEventListener("apiToggle", handleAPIToggle as EventListener);
     window.addEventListener("doorsWindowsDetectionComplete", handleDoorsWindowsDetectionComplete as EventListener);
     window.addEventListener("wallsDetectionComplete", handleWallsDetectionComplete as EventListener);
+    window.addEventListener("roomAreaDetectionComplete", handleRoomAreaDetectionComplete as EventListener);
     
     return () => {
       window.removeEventListener("apiToggle", handleAPIToggle as EventListener);
       window.removeEventListener("doorsWindowsDetectionComplete", handleDoorsWindowsDetectionComplete as EventListener);
       window.removeEventListener("wallsDetectionComplete", handleWallsDetectionComplete as EventListener);
+      window.removeEventListener("roomAreaDetectionComplete", handleRoomAreaDetectionComplete as EventListener);
     };
-  }, [project, currentPage, wallsLayerVisible]);
+  }, [project, currentPage, wallsLayerVisible, roomAreaLayerVisible]);
 
   const renderLayer = (layer: Layer, isDarkMode: boolean) => (
     <div 
@@ -591,6 +662,107 @@ export default function LeftPanel() {
                   "text-sm font-medium",
                   isDarkMode ? "text-zinc-300" : "text-zinc-700"
                 )}>Walls Color</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Room Area Layer - Only show when room area detection has been explicitly activated by the user */}
+        {!roomAreaLayerProcessing && roomAreaDetectionActivated && project?.canvasData?.room_area_processing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                {roomAreaEyeProcessing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye 
+                    className={cn(
+                      "h-4 w-4 transition-all",
+                      roomAreaLayerVisible ? (isDarkMode ? "text-orange-400" : "text-orange-500") : "text-zinc-400",
+                      "group-hover:text-orange-500 dark:group-hover:text-orange-400",
+                      "cursor-pointer"
+                    )}
+                    onClick={async () => {
+                      try {
+                        // Show processing indicator
+                        setRoomAreaEyeProcessing(true);
+                        
+                        const newVisibility = !roomAreaLayerVisible;
+                        setRoomAreaLayerVisible(newVisibility);
+                        
+                        // Update the canvas store to reflect the layer visibility
+                        setLayerVisibility("room_area_processing", newVisibility);
+                        
+                        // Get the appropriate image URL based on visibility
+                        let imageUrl;
+                        if (newVisibility) {
+                          // When showing the layer, use room_area_processing array
+                          imageUrl = project?.canvasData?.room_area_processing?.[currentPage];
+                        } else {
+                          // When hiding the layer, use pages array (original image)
+                          imageUrl = project?.canvasData?.pages?.[currentPage];
+                        }
+                        
+                        if (imageUrl) {
+                          // Call the layer-visibility API
+                          const response = await fetch(`/api/canvas/layer-visibility`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              projectId,
+                              layerId: newVisibility ? "room_area_processing" : "pages",
+                              visible: true,
+                              currentPage
+                            })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (data.success) {
+                            // Dispatch event to update canvas with the appropriate layer
+                            window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+                              detail: {
+                                imageUrl: imageUrl,
+                                layerId: newVisibility ? "room_area_processing" : "pages",
+                                visible: true
+                              }
+                            }));
+                            
+                            console.log(`Toggled to ${newVisibility ? 'room_area_processing' : 'pages'} layer`);
+                          }
+                        } else {
+                          console.error('No image found for the current page');
+                        }
+                      } catch (error) {
+                        console.error('Error toggling room area layer:', error);
+                      } finally {
+                        // Hide processing indicator
+                        setRoomAreaEyeProcessing(false);
+                      }
+                    }}
+                  />
+                )}
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Room Area</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Room Area Processing Indicator */}
+        {roomAreaLayerProcessing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Room Area</span>
               </div>
             </div>
           </div>

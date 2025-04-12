@@ -48,7 +48,7 @@ const apiOptions: APIOption[] = [
   },
   {
     id: "room-detection",
-    title: "Room Detection",
+    title: "Room Area Detection",
     description: "Advanced room recognition with automatic labeling and area calculations.",
     enabled: false,
     icon: "🏠",
@@ -182,6 +182,9 @@ export default function RightPanel() {
       } else if (featureId === "walls-detection") {
         // Dispatch event for walls detection completion
         window.dispatchEvent(new CustomEvent('wallsDetectionComplete'));
+      } else if (featureId === "room-detection") {
+        // Dispatch event for room area detection completion
+        window.dispatchEvent(new CustomEvent('roomAreaDetectionComplete'));
       }
       
     } catch (error) {
@@ -201,6 +204,11 @@ export default function RightPanel() {
     if (!enabled) return;
     await simulateProcessing("walls-detection");
   };
+  
+  const handleRoomAreaDetection = async (enabled: boolean) => {
+    if (!enabled) return;
+    await simulateProcessing("room-detection");
+  };
 
   const handleOptionToggle = async (optionId: string) => {
     try {
@@ -209,7 +217,7 @@ export default function RightPanel() {
       
       // For detection features, we want to ensure they always run the 1-minute process
       // when toggled on, regardless of previous state
-      if (optionId === "doors-windows" || optionId === "walls-detection") {
+      if (optionId === "doors-windows" || optionId === "walls-detection" || optionId === "room-detection") {
         // First set the option to enabled in the UI
         const updatedOptions = apiOptions.map(opt => 
           opt.id === optionId 
@@ -232,6 +240,8 @@ export default function RightPanel() {
           handleDoorsWindowsDetection(true);
         } else if (optionId === "walls-detection") {
           handleWallsDetection(true);
+        } else if (optionId === "room-detection") {
+          handleRoomAreaDetection(true);
         }
       } else {
         // For other options, toggle as normal

@@ -35,7 +35,8 @@ export async function POST(req: Request) {
       single_doors_and_windows: [],
       single_doors_and_double_doors: [],
       double_doors_and_windows: [],
-      wall_color_processing: [] // Added for Walls Detection feature
+      wall_color_processing: [], // Added for Walls Detection feature
+      room_area_processing: [] // Added for Room Area Detection feature
     };
 
     // Implement chunking for large files
@@ -119,6 +120,10 @@ export async function POST(req: Request) {
         wall_color_processing: [
           ...(existingCanvasData.wall_color_processing || []),
           ...(finalCanvasData.wall_color_processing || [])
+        ],
+        room_area_processing: [
+          ...(existingCanvasData.room_area_processing || []),
+          ...(finalCanvasData.room_area_processing || [])
         ]
       };
       
