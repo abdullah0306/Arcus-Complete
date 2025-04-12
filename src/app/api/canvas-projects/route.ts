@@ -195,11 +195,11 @@ export async function GET(req: Request) {
 
       return NextResponse.json(projects[0]);
     } else {
-      // List all projects for the user
+      // List all projects for all users
       const projects = await db
         .select()
-        .from(canvasProjects)
-        .where(eq(canvasProjects.userId, session.user.id));
+        .from(canvasProjects);
+      // No filter by userId - show all projects to all users
 
       return NextResponse.json(projects);
     }
