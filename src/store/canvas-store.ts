@@ -25,7 +25,8 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     windows: false,
     single_doors_and_windows: false,
     single_doors_and_double_doors: false,
-    double_doors_and_windows: false
+    double_doors_and_windows: false,
+    wall_color_processing: false
   },
   setCanvas: (canvas) => set({ canvas }),
   setCurrentLayer: (layer) => set({ currentLayer: layer }),
@@ -40,7 +41,12 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     const state = useCanvasStore.getState();
     const layers = state.layers;
 
-    // Check if we have detection results
+    // Check if wall_color_processing is visible and has data for this page
+    if (layers.wall_color_processing && canvasData.wall_color_processing?.[currentPage]) {
+      return 'wall_color_processing';
+    }
+
+    // Check if we have doors and windows detection results
     const hasDetectionResults = 
       canvasData.complete_doors_and_windows?.[currentPage] ||
       canvasData.single_doors?.[currentPage] ||

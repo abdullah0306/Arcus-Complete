@@ -55,6 +55,14 @@ const doorsWindowsLayers: LayerGroup = {
   ]
 };
 
+const wallsColorLayer: Layer = {
+  id: "wall-color-processing",
+  name: "Walls Color",
+  visible: true,
+  locked: false,
+  type: 'layer'
+};
+
 interface ApiToggleEvent extends CustomEvent {
   detail: {
     apiId: string;
@@ -66,12 +74,16 @@ export default function LeftPanel() {
   const { isDarkMode } = useThemeStore();
   const { setLayerVisibility, layers } = useCanvasStore(); 
   const [activeApiLayers, setActiveApiLayers] = useState<LayerGroup[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [doorsWindowsProcessing, setDoorsWindowsProcessing] = useState(false);
   const [layerStates, setLayerStates] = useState({
     "single-doors": false,
     "double-doors": false,
     "windows": false
   });
+  const [wallsLayerVisible, setWallsLayerVisible] = useState(false);
+  const [wallsLayerProcessing, setWallsLayerProcessing] = useState(false);
+  const [wallsEyeProcessing, setWallsEyeProcessing] = useState(false);
+  const [wallsDetectionActivated, setWallsDetectionActivated] = useState(false);
   const { projectId } = useParams();
   const { data: project } = useGetCanvasProject(projectId as string);
   const { currentPage } = usePDFPageStore();
@@ -79,13 +91,19 @@ export default function LeftPanel() {
   useEffect(() => {
     // When project data loads, we don't automatically show the layers
     // even if detection results exist - they will be shown only after the user
-    // toggles the doors and windows detection switch
+    // toggles the detection switch
     setActiveApiLayers([]);
     setLayerStates({
       "single-doors": false,
       "double-doors": false,
       "windows": false
     });
+    
+    // Reset the walls layer visibility state on page refresh
+    setWallsLayerVisible(false);
+    setWallsLayerProcessing(false);
+    setWallsEyeProcessing(false);
+    setLayerVisibility("wall_color_processing", false);
   }, [project]);
 
   const getLayerArrayKey = (states: typeof layerStates) => {
@@ -151,7 +169,7 @@ export default function LeftPanel() {
         });
       });
 
-      setIsProcessing(true);
+      setDoorsWindowsProcessing(true);
       try {
         const arrayKey = newMainVisible ? "complete_doors_and_windows" : "pages";
         const response = await fetch(`/api/canvas/layer-visibility`, {
@@ -181,7 +199,7 @@ export default function LeftPanel() {
       } catch (error) {
         console.error('Error updating layer visibility:', error);
       } finally {
-        setIsProcessing(false);
+        setDoorsWindowsProcessing(false);
       }
     } else {
       // Handle sub-layer toggle
@@ -207,7 +225,7 @@ export default function LeftPanel() {
         });
       });
 
-      setIsProcessing(true);
+      setDoorsWindowsProcessing(true);
       try {
         const arrayKey = getLayerArrayKey(newStates);
         const response = await fetch(`/api/canvas/layer-visibility`, {
@@ -237,22 +255,66 @@ export default function LeftPanel() {
       } catch (error) {
         console.error('Error updating layer visibility:', error);
       } finally {
-        setIsProcessing(false);
+        setDoorsWindowsProcessing(false);
       }
     }
   };
 
   const handleApiToggle = (apiId: string, enabled: boolean) => {
     if (apiId === "doors-windows") {
-      setActiveApiLayers(enabled ? [doorsWindowsLayers] : []);
-      
-      // Set all sub-layers visibility state
-      const newStates = {
-        "single-doors": enabled,
-        "double-doors": enabled,
-        "windows": enabled
-      };
-      setLayerStates(newStates);
+      if (enabled) {
+        // When enabling, start with layers not visible but show in panel with processing indicator
+        setDoorsWindowsProcessing(true);
+        // Add the layer group but with visibility off initially
+        const initialGroup = {
+          ...doorsWindowsLayers,
+          visible: false,
+          children: doorsWindowsLayers.children.map(child => ({
+            ...child,
+            visible: false
+          }))
+        };
+        setActiveApiLayers([initialGroup]);
+        
+        // Set all sub-layers visibility state to false initially
+        setLayerStates({
+          "single-doors": false,
+          "double-doors": false,
+          "windows": false
+        });
+      } else {
+        // When disabling, remove the layer group entirely
+        setActiveApiLayers([]);
+        setDoorsWindowsProcessing(false);
+      }
+    } else if (apiId === "walls-detection") {
+      if (enabled) {
+        // For walls detection, we'll set the processing state
+        // The actual visibility will be set when the detection completes
+        setWallsLayerProcessing(true);
+        // Initially set to not visible
+        setWallsLayerVisible(false);
+        // Mark that walls detection has been activated in this session
+        setWallsDetectionActivated(true);
+      } else {
+        // When disabling, hide the layer
+        setWallsLayerProcessing(false);
+        setWallsLayerVisible(false);
+        // Reset the activation state
+        setWallsDetectionActivated(false);
+        
+        // Hide the layer on the canvas
+        const wallColorUrl = project?.canvasData?.wall_color_processing?.[currentPage];
+        if (wallColorUrl) {
+          window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+            detail: {
+              imageUrl: wallColorUrl,
+              layerId: "wall_color_processing",
+              visible: false
+            }
+          }));
+        }
+      }
     }
   };
 
@@ -262,19 +324,29 @@ export default function LeftPanel() {
       handleApiToggle(customEvent.detail.apiId, customEvent.detail.enabled);
     };
 
-    const handleDetectionComplete = (event: Event) => {
+    const handleDoorsWindowsDetectionComplete = (event: Event) => {
       // Show doors and windows layers when detection is complete
-      console.log('Detection complete event received');
+      console.log('Doors and windows detection complete event received');
+      setDoorsWindowsProcessing(false);
       
-      // Set the doors-windows layer group as active
-      setActiveApiLayers([{
-        ...doorsWindowsLayers,
-        visible: true,
-        children: doorsWindowsLayers.children.map(child => ({
-          ...child,
-          visible: true
-        }))
-      }]);
+      // Set the doors-windows layer group as active with visibility ON
+      setActiveApiLayers(prev => {
+        // Check if we already have the walls layer active
+        const hasWallsLayer = wallsLayerVisible;
+        
+        // Create a new array with the doors-windows layer group
+        const doorsWindowsGroup = {
+          ...doorsWindowsLayers,
+          visible: true,
+          children: doorsWindowsLayers.children.map(child => ({
+            ...child,
+            visible: true
+          }))
+        };
+        
+        // Return the appropriate layers array
+        return hasWallsLayer ? [doorsWindowsGroup] : [doorsWindowsGroup];
+      });
       
       // Set all sub-layers as visible
       setLayerStates({
@@ -283,25 +355,62 @@ export default function LeftPanel() {
         "windows": true
       });
       
-      // Dispatch event to update canvas with the complete doors and windows layer
-      window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
-        detail: {
-          // Use the current page from the project data
-          imageUrl: project?.canvasData?.pages?.[currentPage],
-          layerId: "complete_doors_and_windows",
-          visible: true
-        }
-      }));
+      // Get the complete doors and windows image URL for the current page
+      const doorsWindowsUrl = project?.canvasData?.complete_doors_and_windows?.[currentPage];
+      
+      if (doorsWindowsUrl) {
+        // Dispatch event to update canvas with the complete doors and windows layer
+        window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            imageUrl: doorsWindowsUrl,
+            layerId: "complete_doors_and_windows",
+            visible: true
+          }
+        }));
+      } else {
+        console.error('No doors and windows image found for the current page');
+      }
+    };
+    
+    const handleWallsDetectionComplete = (event: Event) => {
+      // Processing is complete - show the layer automatically
+      console.log('Walls detection complete event received');
+      
+      // Set processing to false and make the layer visible
+      setWallsLayerProcessing(false);
+      setWallsLayerVisible(true); // Make it visible by default
+      
+      // Update the canvas store to make the layer visible
+      setLayerVisibility("wall_color_processing", true);
+      
+      // Get the wall color processing image URL for the current page
+      const wallColorUrl = project?.canvasData?.wall_color_processing?.[currentPage];
+      console.log('Wall color URL:', wallColorUrl);
+      
+      if (wallColorUrl) {
+        // Make the layer visible immediately after processing completes
+        window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            imageUrl: wallColorUrl,
+            layerId: "wall_color_processing",
+            visible: true // Make it visible by default
+          }
+        }));
+      } else {
+        console.error('No wall color processing image found for the current page');
+      }
     };
 
     window.addEventListener("apiToggle", handleAPIToggle as EventListener);
-    window.addEventListener("doorsWindowsDetectionComplete", handleDetectionComplete as EventListener);
+    window.addEventListener("doorsWindowsDetectionComplete", handleDoorsWindowsDetectionComplete as EventListener);
+    window.addEventListener("wallsDetectionComplete", handleWallsDetectionComplete as EventListener);
     
     return () => {
       window.removeEventListener("apiToggle", handleAPIToggle as EventListener);
-      window.removeEventListener("doorsWindowsDetectionComplete", handleDetectionComplete as EventListener);
+      window.removeEventListener("doorsWindowsDetectionComplete", handleDoorsWindowsDetectionComplete as EventListener);
+      window.removeEventListener("wallsDetectionComplete", handleWallsDetectionComplete as EventListener);
     };
-  }, [project, currentPage]);
+  }, [project, currentPage, wallsLayerVisible]);
 
   const renderLayer = (layer: Layer, isDarkMode: boolean) => (
     <div 
@@ -329,16 +438,21 @@ export default function LeftPanel() {
     <div key={group.id} className="space-y-1">
       <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
         <div className="flex items-center space-x-2">
-          {isProcessing && group.id === "doors-windows" ? (
+          {doorsWindowsProcessing && group.id === "doors-windows" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Eye 
               className={cn(
                 "h-4 w-4 transition-all",
                 group.visible ? (isDarkMode ? "text-orange-400" : "text-orange-500") : "text-zinc-400",
-                "group-hover:text-orange-500 dark:group-hover:text-orange-400"
+                "group-hover:text-orange-500 dark:group-hover:text-orange-400",
+                doorsWindowsProcessing ? "cursor-not-allowed opacity-50" : "cursor-pointer"
               )} 
-              onClick={() => toggleLayerVisibility(group.id)} 
+              onClick={() => {
+                if (!doorsWindowsProcessing) {
+                  toggleLayerVisibility(group.id);
+                }
+              }} 
             />
           )}
           <span className={cn(
@@ -380,6 +494,107 @@ export default function LeftPanel() {
       </div>
       <div className="p-2 space-y-1 overflow-y-auto flex-grow"> 
         {activeApiLayers.map(group => renderLayerGroup(group, isDarkMode))}
+        
+        {/* Walls Color Layer - Only show when walls detection has been explicitly activated by the user */}
+        {!wallsLayerProcessing && wallsDetectionActivated && project?.canvasData?.wall_color_processing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                {wallsEyeProcessing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye 
+                    className={cn(
+                      "h-4 w-4 transition-all",
+                      wallsLayerVisible ? (isDarkMode ? "text-orange-400" : "text-orange-500") : "text-zinc-400",
+                      "group-hover:text-orange-500 dark:group-hover:text-orange-400",
+                      "cursor-pointer"
+                    )}
+                    onClick={async () => {
+                      try {
+                        // Show processing indicator
+                        setWallsEyeProcessing(true);
+                        
+                        const newVisibility = !wallsLayerVisible;
+                        setWallsLayerVisible(newVisibility);
+                        
+                        // Update the canvas store to reflect the layer visibility
+                        setLayerVisibility("wall_color_processing", newVisibility);
+                        
+                        // Get the appropriate image URL based on visibility
+                        let imageUrl;
+                        if (newVisibility) {
+                          // When showing the layer, use wall_color_processing array
+                          imageUrl = project?.canvasData?.wall_color_processing?.[currentPage];
+                        } else {
+                          // When hiding the layer, use pages array (original image)
+                          imageUrl = project?.canvasData?.pages?.[currentPage];
+                        }
+                        
+                        if (imageUrl) {
+                          // Call the layer-visibility API
+                          const response = await fetch(`/api/canvas/layer-visibility`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              projectId,
+                              layerId: newVisibility ? "wall_color_processing" : "pages",
+                              visible: true,
+                              currentPage
+                            })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (data.success) {
+                            // Dispatch event to update canvas with the appropriate layer
+                            window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+                              detail: {
+                                imageUrl: imageUrl,
+                                layerId: newVisibility ? "wall_color_processing" : "pages",
+                                visible: true
+                              }
+                            }));
+                            
+                            console.log(`Toggled to ${newVisibility ? 'wall_color_processing' : 'pages'} layer`);
+                          }
+                        } else {
+                          console.error('No image found for the current page');
+                        }
+                      } catch (error) {
+                        console.error('Error toggling wall color layer:', error);
+                      } finally {
+                        // Hide processing indicator
+                        setWallsEyeProcessing(false);
+                      }
+                    }}
+                  />
+                )}
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Walls Color</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Walls Color Processing Indicator */}
+        {wallsLayerProcessing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Walls Color</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
