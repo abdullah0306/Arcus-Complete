@@ -23,7 +23,6 @@ export async function GET(
       .from(canvasProjects)
       .where(
         eq(canvasProjects.id, params.projectId)
-        // Removed the user ID filter to allow any user to access any project
       )
       .limit(1);
 
@@ -67,6 +66,7 @@ export async function PATCH(
       room_area_processing: [], // Added for Room Area Detection feature
       room_n_processing: [], // Added for Room Number Detection feature
       exclusion_Zones_processing: [], // Added for Inclusive/Exclusive Zones Detection feature
+      fire_alarm_processing: [], // Added for Fire Alarm Detection feature
     };
 
     // Merge with provided data if it exists
@@ -84,6 +84,7 @@ export async function PATCH(
           single_doors_and_windows: canvasData.single_doors_and_windows || [],
           single_doors_and_double_doors: canvasData.single_doors_and_double_doors || [],
           double_doors_and_windows: canvasData.double_doors_and_windows || [],
+          fire_alarm_processing: canvasData.fire_alarm_processing || [],
         } 
       : defaultCanvasData;
 
@@ -108,7 +109,8 @@ export async function PATCH(
           wall_color_processing: finalCanvasData.wall_color_processing,
           room_area_processing: finalCanvasData.room_area_processing,
           room_n_processing: finalCanvasData.room_n_processing,
-          exclusion_Zones_processing: finalCanvasData.exclusion_Zones_processing
+          exclusion_Zones_processing: finalCanvasData.exclusion_Zones_processing,
+          fire_alarm_processing: finalCanvasData.fire_alarm_processing
         }
       })
       .where(

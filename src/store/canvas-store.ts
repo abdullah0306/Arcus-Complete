@@ -29,7 +29,8 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     wall_color_processing: false,
     room_area_processing: false,
     room_n_processing: false,
-    exclusion_Zones_processing: false
+    exclusion_Zones_processing: false,
+    fire_alarm_processing: false
   },
   setCanvas: (canvas) => set({ canvas }),
   setCurrentLayer: (layer) => set({ currentLayer: layer }),
@@ -44,6 +45,11 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     const state = useCanvasStore.getState();
     const layers = state.layers;
 
+    // Check if fire_alarm_processing is visible and has data for this page
+    if (layers.fire_alarm_processing && canvasData.fire_alarm_processing?.[currentPage]) {
+      return 'fire_alarm_processing';
+    }
+    
     // Check if exclusion_Zones_processing is visible and has data for this page
     if (layers.exclusion_Zones_processing && canvasData.exclusion_Zones_processing?.[currentPage]) {
       return 'exclusion_Zones_processing';

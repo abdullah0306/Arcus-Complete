@@ -38,7 +38,8 @@ export async function POST(req: Request) {
       wall_color_processing: [], // Added for Walls Detection feature
       room_area_processing: [], // Added for Room Area Detection feature
       room_n_processing: [], // Added for Room Number Detection feature
-      exclusion_Zones_processing: [] // Added for Inclusive/Exclusive Zones Detection feature
+      exclusion_Zones_processing: [], // Added for Inclusive/Exclusive Zones Detection feature
+      fire_alarm_processing: [] // Added for Fire Alarm Detection feature
     };
 
     // Implement chunking for large files
@@ -61,7 +62,8 @@ export async function POST(req: Request) {
       windows: canvasData.windows || defaultCanvasData.windows,
       single_doors_and_windows: canvasData.single_doors_and_windows || defaultCanvasData.single_doors_and_windows,
       single_doors_and_double_doors: canvasData.single_doors_and_double_doors || defaultCanvasData.single_doors_and_double_doors,
-      double_doors_and_windows: canvasData.double_doors_and_windows || defaultCanvasData.double_doors_and_windows
+      double_doors_and_windows: canvasData.double_doors_and_windows || defaultCanvasData.double_doors_and_windows,
+      fire_alarm_processing: canvasData.fire_alarm_processing || defaultCanvasData.fire_alarm_processing
     };
 
     // Create project with validated data
@@ -134,6 +136,10 @@ export async function POST(req: Request) {
         exclusion_Zones_processing: [
           ...(existingCanvasData.exclusion_Zones_processing || []),
           ...(finalCanvasData.exclusion_Zones_processing || [])
+        ],
+        fire_alarm_processing: [
+          ...(existingCanvasData.fire_alarm_processing || []),
+          ...(finalCanvasData.fire_alarm_processing || [])
         ]
       };
       
