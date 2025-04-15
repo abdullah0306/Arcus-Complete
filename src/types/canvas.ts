@@ -16,6 +16,7 @@ export interface CanvasData {
   room_area_processing: string[];
   room_n_processing: string[];
   exclusion_Zones_processing: string[];
+  fire_alarm_processing: string[];
 
   // Add index signature for dynamic access
   [key: string]: string | string[] | number | undefined;

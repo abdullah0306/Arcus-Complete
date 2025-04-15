@@ -147,7 +147,8 @@ export const canvasProjects = pgTable("canvas_projects", {
     wall_color_processing: [], // Walls Detection feature
     room_area_processing: [], // Room Area Detection feature
     room_n_processing: [], // Room Number Detection feature
-    exclusion_Zones_processing: [] // Inclusive/Exclusive Zones Detection feature
+    exclusion_Zones_processing: [], // Inclusive/Exclusive Zones Detection feature
+    fire_alarm_processing: [] // Fire Alarm Detection feature
   } as CanvasData),
 });
 

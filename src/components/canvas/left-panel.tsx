@@ -102,6 +102,12 @@ export default function LeftPanel() {
   const [exclusionZonesLayerProcessing, setExclusionZonesLayerProcessing] = useState(false);
   const [exclusionZonesEyeProcessing, setExclusionZonesEyeProcessing] = useState(false);
   const [exclusionZonesDetectionActivated, setExclusionZonesDetectionActivated] = useState(false);
+  
+  // Fire Alarm Detection states
+  const [fireAlarmLayerVisible, setFireAlarmLayerVisible] = useState(false);
+  const [fireAlarmLayerProcessing, setFireAlarmLayerProcessing] = useState(false);
+  const [fireAlarmEyeProcessing, setFireAlarmEyeProcessing] = useState(false);
+  const [fireAlarmDetectionActivated, setFireAlarmDetectionActivated] = useState(false);
   const { projectId } = useParams();
   const { data: project } = useGetCanvasProject(projectId as string);
   const { currentPage } = usePDFPageStore();
@@ -140,6 +146,12 @@ export default function LeftPanel() {
     setExclusionZonesLayerProcessing(false);
     setExclusionZonesEyeProcessing(false);
     setLayerVisibility("exclusion_Zones_processing", false);
+    
+    // Reset the fire alarm layer visibility state on page refresh
+    setFireAlarmLayerVisible(false);
+    setFireAlarmLayerProcessing(false);
+    setFireAlarmEyeProcessing(false);
+    setLayerVisibility("fire_alarm_processing", false);
   }, [project]);
 
   const getLayerArrayKey = (states: typeof layerStates) => {
@@ -435,6 +447,34 @@ export default function LeftPanel() {
           }));
         }
       }
+    } else if (apiId === "fire-alarm") {
+      if (enabled) {
+        // For fire alarm detection, we'll set the processing state
+        // The actual visibility will be set when the detection completes
+        setFireAlarmLayerProcessing(true);
+        // Initially set to not visible
+        setFireAlarmLayerVisible(false);
+        // Mark that fire alarm detection has been activated in this session
+        setFireAlarmDetectionActivated(true);
+      } else {
+        // When disabling, hide the layer
+        setFireAlarmLayerProcessing(false);
+        setFireAlarmLayerVisible(false);
+        // Reset the activation state
+        setFireAlarmDetectionActivated(false);
+        
+        // Hide the layer on the canvas
+        const fireAlarmUrl = project?.canvasData?.fire_alarm_processing?.[currentPage];
+        if (fireAlarmUrl) {
+          window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+            detail: {
+              imageUrl: fireAlarmUrl,
+              layerId: "fire_alarm_processing",
+              visible: false
+            }
+          }));
+        }
+      }
     }
   };
 
@@ -607,6 +647,35 @@ export default function LeftPanel() {
         console.error('No exclusion zones processing image found for the current page');
       }
     };
+    
+    const handleFireAlarmDetectionComplete = (event: Event) => {
+      // Processing is complete - show the layer automatically
+      console.log('Fire Alarm detection complete event received');
+      
+      // Set processing to false and make the layer visible
+      setFireAlarmLayerProcessing(false);
+      setFireAlarmLayerVisible(true); // Make it visible by default
+      
+      // Update the canvas store to make the layer visible
+      setLayerVisibility("fire_alarm_processing", true);
+      
+      // Get the fire alarm processing image URL for the current page
+      const fireAlarmUrl = project?.canvasData?.fire_alarm_processing?.[currentPage];
+      console.log('Fire Alarm URL:', fireAlarmUrl);
+      
+      if (fireAlarmUrl) {
+        // Make the layer visible immediately after processing completes
+        window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            imageUrl: fireAlarmUrl,
+            layerId: "fire_alarm_processing",
+            visible: true // Make it visible by default
+          }
+        }));
+      } else {
+        console.error('No fire alarm processing image found for the current page');
+      }
+    };
 
     window.addEventListener("apiToggle", handleAPIToggle as EventListener);
     window.addEventListener("doorsWindowsDetectionComplete", handleDoorsWindowsDetectionComplete as EventListener);
@@ -614,6 +683,7 @@ export default function LeftPanel() {
     window.addEventListener("roomAreaDetectionComplete", handleRoomAreaDetectionComplete as EventListener);
     window.addEventListener("roomNumberDetectionComplete", handleRoomNumberDetectionComplete as EventListener);
     window.addEventListener("exclusionZonesDetectionComplete", handleExclusionZonesDetectionComplete as EventListener);
+    window.addEventListener("fireAlarmDetectionComplete", handleFireAlarmDetectionComplete as EventListener);
     
     return () => {
       window.removeEventListener("apiToggle", handleAPIToggle as EventListener);
@@ -622,8 +692,9 @@ export default function LeftPanel() {
       window.removeEventListener("roomAreaDetectionComplete", handleRoomAreaDetectionComplete as EventListener);
       window.removeEventListener("roomNumberDetectionComplete", handleRoomNumberDetectionComplete as EventListener);
       window.removeEventListener("exclusionZonesDetectionComplete", handleExclusionZonesDetectionComplete as EventListener);
+      window.removeEventListener("fireAlarmDetectionComplete", handleFireAlarmDetectionComplete as EventListener);
     };
-  }, [project, currentPage, wallsLayerVisible, roomAreaLayerVisible, roomNLayerVisible, exclusionZonesLayerVisible]);
+  }, [project, currentPage, wallsLayerVisible, roomAreaLayerVisible, roomNLayerVisible, exclusionZonesLayerVisible, fireAlarmLayerVisible]);
 
   const renderLayer = (layer: Layer, isDarkMode: boolean) => (
     <div 
@@ -1107,6 +1178,107 @@ export default function LeftPanel() {
                   "text-sm font-medium",
                   isDarkMode ? "text-zinc-300" : "text-zinc-700"
                 )}>Inclusive/Exclusive Zones</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Fire Alarm Layer - Only show when fire alarm detection has been explicitly activated by the user */}
+        {!fireAlarmLayerProcessing && fireAlarmDetectionActivated && project?.canvasData?.fire_alarm_processing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                {fireAlarmEyeProcessing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye 
+                    className={cn(
+                      "h-4 w-4 transition-all",
+                      fireAlarmLayerVisible ? (isDarkMode ? "text-orange-400" : "text-orange-500") : "text-zinc-400",
+                      "group-hover:text-orange-500 dark:group-hover:text-orange-400",
+                      "cursor-pointer"
+                    )}
+                    onClick={async () => {
+                      try {
+                        // Show processing indicator
+                        setFireAlarmEyeProcessing(true);
+                        
+                        const newVisibility = !fireAlarmLayerVisible;
+                        setFireAlarmLayerVisible(newVisibility);
+                        
+                        // Update the canvas store to reflect the layer visibility
+                        setLayerVisibility("fire_alarm_processing", newVisibility);
+                        
+                        // Get the appropriate image URL based on visibility
+                        let imageUrl;
+                        if (newVisibility) {
+                          // When showing the layer, use fire_alarm_processing array
+                          imageUrl = project?.canvasData?.fire_alarm_processing?.[currentPage];
+                        } else {
+                          // When hiding the layer, use pages array (original image)
+                          imageUrl = project?.canvasData?.pages?.[currentPage];
+                        }
+                        
+                        if (imageUrl) {
+                          // Call the layer-visibility API
+                          const response = await fetch(`/api/canvas/layer-visibility`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              projectId,
+                              layerId: newVisibility ? "fire_alarm_processing" : "pages",
+                              visible: true,
+                              currentPage
+                            })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (data.success) {
+                            // Dispatch event to update canvas with the appropriate layer
+                            window.dispatchEvent(new CustomEvent('layerVisibilityChanged', {
+                              detail: {
+                                imageUrl: imageUrl,
+                                layerId: newVisibility ? "fire_alarm_processing" : "pages",
+                                visible: true
+                              }
+                            }));
+                            
+                            console.log(`Toggled to ${newVisibility ? 'fire_alarm_processing' : 'pages'} layer`);
+                          }
+                        } else {
+                          console.error('No image found for the current page');
+                        }
+                      } catch (error) {
+                        console.error('Error toggling fire alarm layer:', error);
+                      } finally {
+                        // Hide processing indicator
+                        setFireAlarmEyeProcessing(false);
+                      }
+                    }}
+                  />
+                )}
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Fire Alarm</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Fire Alarm Processing Indicator */}
+        {fireAlarmLayerProcessing && (
+          <div className="space-y-1 mt-3">
+            <div className="flex items-center justify-between p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md">
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className={cn(
+                  "text-sm font-medium",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700"
+                )}>Fire Alarm</span>
               </div>
             </div>
           </div>
